@@ -1,13 +1,21 @@
+import csv, io, os, json
+
 from django.shortcuts import render
 
-# Create your views here.
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-import csv, io
+from dotenv import load_dotenv
+load_dotenv()
+
+from groq import Groq
+client = Groq(api_key=os.environ.get('GROQ_API_KEY'))
 
 REQUIRED_COLUMNS = {'input', 'expected_output', 'marks', 'type'}
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+TESTCASE_PROMPT = open(os.path.join(BASE_DIR, 'prompts', 'testcase_prompt.txt')).read()
+EDGECASE_PROMPT = open(os.path.join(BASE_DIR, 'prompts', 'edgecase_prompt.txt')).read()
 
 @api_view(['POST'])
 
@@ -89,37 +97,39 @@ def generate_testcases(request):
     if not constraints:
         return Response({'error': 'Constraints are required'}, status=400)
     
-    #Integrate bodhibot....
+    testcase_message = TESTCASE_PROMPT + f"""
+            Problem Statement: {problem_statement}
+            Input Format: {input_format}
+            Output Format: {output_format}
+            Constraints: {constraints}
+            """
+    testcase_response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": testcase_message}],
+        temperature=0.7,
+    )
 
-    return Response({"test_cases": [
-        {
-            'id': 1,
-            'input': '1 2\n3 4',
-            'expected_output': '10',
-            'constraints': '1 <= a, b, c, d <= 1000',
-            'marks': 10,
-            'type': 'normal',
-            'notes': 'This is a sample test case generated based on the provided problem statement and constraints.',
-        },
-        {
-            'id': 2,
-            'input': '5 6\n7 8',
-            'expected_output': '26',
-            'constraints': '1 <= a, b, c, d <= 1000',
-            'marks': 10,
-            'type': 'normal',
-            'notes': 'This is another sample test case generated based on the provided problem statement and constraints.',
-        },
-        {
-            'id': 3,
-            'input': '100 200\n300 400',
-            'expected_output': '1000',
-            'constraints': '1 <= a, b, c, d <= 1000',
-            'marks': 10,
-            'type': 'normal',
-            'notes': 'This is a third sample test case generated based on the provided problem statement and constraints.',
-        }
-    ]})
+    test_cases = testcase_response.choices[0].message.content
+
+    try:
+            cleaned = test_cases.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("```")[1]
+                if cleaned.startswith("json"):
+                    cleaned = cleaned[4:]
+            data = json.loads(cleaned.strip())
+            return Response(data)
+    except json.JSONDecodeError:
+            return Response({'error': 'Failed to parse response from AI', 'raw': test_cases}, status=500)
+
+
+
+
+
+
+
+
+
 
 
 @api_view(['POST'])
@@ -138,31 +148,26 @@ def generate_edgecases(request):
     if not constraints:
         return Response({'error': 'Constraints are required'}, status=400)
     
-    #Integrate bodhibot....
-
-    return Response({"edge_cases": [
-        {
-            'id': 1,
-            'input': '0 0\n0 0',
-            'expected_output': '0',
-            'constraints': '1 <= a, b, c, d <= 1000',
-            'edge_type': 'max',
-            'notes': 'This test case checks the behavior of the solution when all inputs are at their minimum values.'
-        },
-        {
-            'id': 2,
-            'input': '1000 1000\n1000 1000',
-            'expected_output': '4000000000',
-            'constraints': '1 <= a, b, c, d <= 1000',
-            'edge_type': 'min',
-            'notes': 'This test case checks the behavior of the solution when all inputs are at their maximum values.'
-        },
-        {
-            'id': 3,
-            'input': '-1 -1\n-1 -1',
-            'expected_output': '-4',
-            'constraints': '-1000 <= a, b, c, d <= -1',
-            'edge_type': 'negative',
-            'notes': 'This test case checks the behavior of the solution when all inputs are negative values.'
-        }
-    ]})  
+    edgecase_message = EDGECASE_PROMPT + f"""
+            Problem Statement: {problem_statement}
+            Input Format: {input_format}
+            Output Format: {output_format}
+            Constraints: {constraints}
+            """
+    edgecase_response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": edgecase_message}],
+        temperature=0.7,
+    )
+    edge_cases = edgecase_response.choices[0].message.content
+    try:
+            cleaned = edge_cases.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("```")[1]
+                if cleaned.startswith("json"):
+                    cleaned = cleaned[4:]
+            data = json.loads(cleaned.strip())
+            return Response(data)
+    except json.JSONDecodeError:
+            return Response({'error': 'Failed to parse response from AI', 'raw': edge_cases}, status=500)
+    
