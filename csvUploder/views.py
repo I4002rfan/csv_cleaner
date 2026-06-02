@@ -1,4 +1,5 @@
 import csv, io, os, json
+from .utils import get_coverage
 
 from django.shortcuts import render
 
@@ -8,17 +9,25 @@ from rest_framework.response import Response
 from dotenv import load_dotenv
 load_dotenv()
 
+from .models import Course, Problem, Module
+
 from groq import Groq
 client = Groq(api_key=os.environ.get('GROQ_API_KEY'))
+#from openai import OpenAI
+#client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
+
 
 REQUIRED_COLUMNS = {'input', 'expected_output', 'marks', 'type'}
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 TESTCASE_PROMPT = open(os.path.join(BASE_DIR, 'prompts', 'testcase_prompt.txt')).read()
 EDGECASE_PROMPT = open(os.path.join(BASE_DIR, 'prompts', 'edgecase_prompt.txt')).read()
+SYLLABUS_PROMPT = open(os.path.join(BASE_DIR, 'prompts', 'syllabus_prompt.txt')).read()
 
+
+
+# .csv part
 @api_view(['POST'])
-
 def upload_csv(request):
     file = request.FILES.get('file')
     if not file:
@@ -37,8 +46,6 @@ def upload_csv(request):
 
     if not REQUIRED_COLUMNS.issubset(cleaned_fields):
         return Response({'error': f'Missing required columns. Required columns are: {REQUIRED_COLUMNS}'}, status=400)
-
-
 
 
     success_rows = []
@@ -80,6 +87,64 @@ def upload_csv(request):
 })
 
 
+
+
+
+# Arranging syllabus in a hierarchical manner using AI
+@api_view(['POST'])
+def upload_syllabus(request):
+    course_name = request.data.get('course_name')
+    course_level = request.data.get('course_level')
+    raw_syllabus = request.data.get('syllabus')
+
+    if not course_name:
+        return Response({'error': 'Course name is required'}, status=400)
+    if not course_level:
+        return Response({'error': 'Course level is required'}, status=400)
+    if not raw_syllabus:
+        return Response({'error': 'Syllabus is required'}, status=400)
+    
+    syllabus_message = SYLLABUS_PROMPT.replace("{{SYLLABUS_TEXT}}", raw_syllabus)
+    
+    syllabus_response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        #model="meta-llama/Llama-2-7b-hf",
+        messages=[{"role": "user", "content": syllabus_message}],
+        temperature=0.4,
+    )
+
+    structured_syllabus = syllabus_response.choices[0].message.content
+
+    try:
+        cleaned = structured_syllabus.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("```")[1]
+            if cleaned.startswith("json"):
+                cleaned = cleaned[4:]
+        structured_syllabus = json.loads(cleaned.strip())
+    except json.JSONDecodeError:
+        return Response({'error': 'Failed to parse response from AI', 'raw': structured_syllabus}, status=500)
+
+    try:
+        course = Course.objects.create(
+            course_name=course_name,
+            course_level=course_level,
+            syllabus=structured_syllabus
+        )
+    except Exception as e:
+        return Response({'error': f'Failed to save course: {str(e)}'}, status=500)
+
+    return Response({
+        'message': 'Syllabus uploaded successfully',
+        'course_id': course.id,
+        'course_name': course.course_name,
+        'syllabus': structured_syllabus
+    })
+
+
+
+
+# Generating test cases using AI
 @api_view(['POST'])
 def generate_testcases(request):
 
@@ -97,6 +162,13 @@ def generate_testcases(request):
     if not constraints:
         return Response({'error': 'Constraints are required'}, status=400)
     
+    course_id = request.data.get('course_id')
+    module_tags = request.data.get('module_tags')
+
+    coverage = None
+    if course_id and module_tags:
+        coverage = get_coverage(course_id, module_tags)
+
     testcase_message = TESTCASE_PROMPT + f"""
             Problem Statement: {problem_statement}
             Input Format: {input_format}
@@ -105,8 +177,9 @@ def generate_testcases(request):
             """
     testcase_response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
+        #model="meta-llama/Llama-2-7b-hf",
         messages=[{"role": "user", "content": testcase_message}],
-        temperature=0.7,
+        temperature=0.3,
     )
 
     test_cases = testcase_response.choices[0].message.content
@@ -128,10 +201,7 @@ def generate_testcases(request):
 
 
 
-
-
-
-
+# Generating edge cases using AI
 @api_view(['POST'])
 def generate_edgecases(request):
     problem_statement = request.data.get('problem_statement')
@@ -156,8 +226,9 @@ def generate_edgecases(request):
             """
     edgecase_response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
+        #model="meta-llama/Llama-2-7b-hf",
         messages=[{"role": "user", "content": edgecase_message}],
-        temperature=0.7,
+        temperature=0.3,
     )
     edge_cases = edgecase_response.choices[0].message.content
     try:
