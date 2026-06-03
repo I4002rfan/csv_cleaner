@@ -1,5 +1,5 @@
 import csv, io, os, json
-from .utils import get_coverage, get_difficulty_context
+from .utils import get_coverage, get_difficulty_context, parse_ai_json
 
 from django.shortcuts import render
 
@@ -116,20 +116,15 @@ def upload_syllabus(request):
     structured_syllabus = syllabus_response.choices[0].message.content
 
     try:
-        cleaned = structured_syllabus.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("```")[1]
-            if cleaned.startswith("json"):
-                cleaned = cleaned[4:]
-        structured_syllabus = json.loads(cleaned.strip())
+        data = parse_ai_json(structured_syllabus)
     except json.JSONDecodeError:
-        return Response({'error': 'Failed to parse response from AI', 'raw': structured_syllabus}, status=500)
+        return Response({'error': 'Failed to parse response from AI'}, status=500)
 
     try:
         course = Course.objects.create(
             course_name=course_name,
             course_level=course_level,
-            syllabus=structured_syllabus
+            syllabus=data
         )
     except Exception as e:
         return Response({'error': f'Failed to save course: {str(e)}'}, status=500)
@@ -138,7 +133,7 @@ def upload_syllabus(request):
         'message': 'Syllabus uploaded successfully',
         'course_id': course.id,
         'course_name': course.course_name,
-        'syllabus': structured_syllabus
+        'syllabus': data
     })
 
 
@@ -197,16 +192,10 @@ def generate_testcases(request):
     test_cases = testcase_response.choices[0].message.content
 
     try:
-        cleaned = test_cases.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("```")[1]
-            if cleaned.startswith("json"):
-                cleaned = cleaned[4:]
-        data = json.loads(cleaned.strip())
+        data = parse_ai_json(test_cases)
         return Response(data)
     except json.JSONDecodeError:
         return Response({'error': 'Failed to parse response from AI'}, status=500)
-
 
 
 
@@ -264,14 +253,9 @@ def generate_edgecases(request):
         temperature=0.3,
     )
     edge_cases = edgecase_response.choices[0].message.content
-    try:
-            cleaned = edge_cases.strip()
-            if cleaned.startswith("```"):
-                cleaned = cleaned.split("```")[1]
-                if cleaned.startswith("json"):
-                    cleaned = cleaned[4:]
-            data = json.loads(cleaned.strip())
-            return Response(data)
-    except json.JSONDecodeError:
-            return Response({'error': 'Failed to parse response from AI'}, status=500)
     
+    try:
+        data = parse_ai_json(edge_cases)
+        return Response(data)
+    except json.JSONDecodeError:
+        return Response({'error': 'Failed to parse response from AI'}, status=500)

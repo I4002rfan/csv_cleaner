@@ -1,5 +1,13 @@
+import json
 from .models import Course
 
+def parse_ai_json(raw_text):
+    cleaned = raw_text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("```")[1]
+        if cleaned.startswith("json"):
+            cleaned = cleaned[4:]
+    return json.loads(cleaned.strip())
 
 
 def get_coverage(course_id, module_tags):
