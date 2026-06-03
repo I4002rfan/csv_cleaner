@@ -144,7 +144,6 @@ def upload_syllabus(request):
 
 
 
-# Generating test cases using AI
 @api_view(['POST'])
 def generate_testcases(request):
 
@@ -169,15 +168,25 @@ def generate_testcases(request):
     if course_id and module_tags:
         coverage = get_coverage(course_id, module_tags)
 
-    testcase_message = TESTCASE_PROMPT + f"""
+    context = ""
+    if coverage:
+        context = f"""
+            Syllabus Context:
+            - Topics covered so far: {coverage['topics_covered']}
+            - Topics not yet covered: {coverage['topics_not_covered']}
+            - This problem specifically tests: {coverage['focus_topics']}
+            IMPORTANT: Only generate test cases relevant to topics covered. Do not test concepts from topics not yet covered.
+             """
+
+    testcase_message = TESTCASE_PROMPT + context + f"""
             Problem Statement: {problem_statement}
             Input Format: {input_format}
             Output Format: {output_format}
             Constraints: {constraints}
             """
+
     testcase_response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
-        #model="meta-llama/Llama-2-7b-hf",
         messages=[{"role": "user", "content": testcase_message}],
         temperature=0.3,
     )
@@ -185,16 +194,15 @@ def generate_testcases(request):
     test_cases = testcase_response.choices[0].message.content
 
     try:
-            cleaned = test_cases.strip()
-            if cleaned.startswith("```"):
-                cleaned = cleaned.split("```")[1]
-                if cleaned.startswith("json"):
-                    cleaned = cleaned[4:]
-            data = json.loads(cleaned.strip())
-            return Response(data)
+        cleaned = test_cases.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("```")[1]
+            if cleaned.startswith("json"):
+                cleaned = cleaned[4:]
+        data = json.loads(cleaned.strip())
+        return Response(data)
     except json.JSONDecodeError:
-            return Response({'error': 'Failed to parse response from AI', 'raw': test_cases}, status=500)
-
+        return Response({'error': 'Failed to parse response from AI', 'raw': test_cases}, status=500)
 
 
 
@@ -218,7 +226,24 @@ def generate_edgecases(request):
     if not constraints:
         return Response({'error': 'Constraints are required'}, status=400)
     
-    edgecase_message = EDGECASE_PROMPT + f"""
+    course_id = request.data.get('course_id')
+    module_tags = request.data.get('module_tags')
+
+    coverage = None
+    if course_id and module_tags:
+        coverage = get_coverage(course_id, module_tags)
+
+    context = ""
+    if coverage:
+        context = f"""
+            Syllabus Context:
+            - Topics covered so far: {coverage['topics_covered']}
+            - Topics not yet covered: {coverage['topics_not_covered']}
+            - This problem specifically tests: {coverage['focus_topics']}
+            IMPORTANT: Only generate test cases relevant to topics covered. Do not test concepts from topics not yet covered.
+             """
+
+    edgecase_message = EDGECASE_PROMPT + context + f"""
             Problem Statement: {problem_statement}
             Input Format: {input_format}
             Output Format: {output_format}
