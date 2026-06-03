@@ -1,5 +1,5 @@
 import csv, io, os, json
-from .utils import get_coverage
+from .utils import get_coverage, get_difficulty_context
 
 from django.shortcuts import render
 
@@ -143,7 +143,7 @@ def upload_syllabus(request):
 
 
 
-
+# Generating test cases using AI
 @api_view(['POST'])
 def generate_testcases(request):
 
@@ -163,6 +163,9 @@ def generate_testcases(request):
     
     course_id = request.data.get('course_id')
     module_tags = request.data.get('module_tags')
+    exam_type = request.data.get('exam_type', 'practice')
+    problem_level = request.data.get('problem_level', 'beginner')
+    difficulty_context = get_difficulty_context(exam_type, problem_level)
 
     coverage = None
     if course_id and module_tags:
@@ -178,12 +181,12 @@ def generate_testcases(request):
             IMPORTANT: Only generate test cases relevant to topics covered. Do not test concepts from topics not yet covered.
              """
 
-    testcase_message = TESTCASE_PROMPT + context + f"""
+    testcase_message = TESTCASE_PROMPT + f"""
             Problem Statement: {problem_statement}
             Input Format: {input_format}
             Output Format: {output_format}
             Constraints: {constraints}
-            """
+            """ + context + difficulty_context
 
     testcase_response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
