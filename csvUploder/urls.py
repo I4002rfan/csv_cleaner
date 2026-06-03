@@ -6,4 +6,5 @@ urlpatterns = [
     path('generate-testcases/', views.generate_testcases, name='generate_testcases'),
     path('generate-edgecases/', views.generate_edgecases, name='generate_edgecases'),
     path('upload-syllabus/', views.upload_syllabus, name='upload_syllabus'),
+    path('generate-rubric/', views.generate_rubric, name='generate_rubric'),
 ]

@@ -23,6 +23,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TESTCASE_PROMPT = open(os.path.join(BASE_DIR, 'prompts', 'testcase_prompt.txt')).read()
 EDGECASE_PROMPT = open(os.path.join(BASE_DIR, 'prompts', 'edgecase_prompt.txt')).read()
 SYLLABUS_PROMPT = open(os.path.join(BASE_DIR, 'prompts', 'syllabus_prompt.txt')).read()
+RUBRIC_PROMPT = open(os.path.join(BASE_DIR, 'prompts', 'rubric_prompt.txt')).read()
 
 
 
@@ -259,3 +260,56 @@ def generate_edgecases(request):
         return Response(data)
     except json.JSONDecodeError:
         return Response({'error': 'Failed to parse response from AI'}, status=500)
+    
+
+
+
+# Generating grading rubric using AI
+@api_view(['POST'])
+def generate_rubric(request):
+    problem_statement = request.data.get('problem_statement')
+    total_marks = request.data.get('total_marks')
+
+    test_cases = request.data.get('test_cases')
+    edge_cases = request.data.get('edge_cases')
+    course_id = request.data.get('course_id')
+    module_tags = request.data.get('module_tags')
+    exam_type = request.data.get('exam_type', 'practice')
+    problem_level = request.data.get('problem_level', 'beginner')
+
+    if not problem_statement:
+        return Response({'error': 'Problem statement is required'}, status=400)
+    if not total_marks:
+        return Response({'error': 'Total marks are required'}, status=400)
+    
+    if not test_cases and not edge_cases:
+        return Response({'error': 'Test cases or edge cases are required to generate rubric'}, status=400)
+    if not test_cases:
+        test_cases = []
+    if not edge_cases:
+        edge_cases = []
+
+
+    rubric_message = RUBRIC_PROMPT \
+        .replace("{{PROBLEM_STATEMENT}}", problem_statement) \
+        .replace("{{TOTAL_MARKS}}", str(total_marks)) \
+        .replace("{{TEST_CASES}}", json.dumps(test_cases)) \
+        .replace("{{EDGE_CASES}}", json.dumps(edge_cases))
+
+    rubric_response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": rubric_message}],
+        temperature=0.3,
+    )
+
+    rubric = rubric_response.choices[0].message.content
+
+    try:
+        data = parse_ai_json(rubric)
+    except json.JSONDecodeError:
+        return Response({'error': 'Failed to parse response from AI'}, status=500)
+
+    for criterion in data['rubric']:
+        criterion['marks'] = round(criterion['percentage'] * int(total_marks) / 100, 2)
+
+    return Response(data)

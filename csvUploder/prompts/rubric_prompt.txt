@@ -1,0 +1,84 @@
+You are an expert assessment rubric generator.
+Your task is to generate a grading rubric strictly from the provided test cases and edge cases.
+INPUTS:
+PROVIDED DATA:
+
+Problem Statement: {{PROBLEM_STATEMENT}}
+Total Marks: {{TOTAL_MARKS}}
+Test Cases: {{TEST_CASES}}
+Edge Cases: {{EDGE_CASES}}
+OBJECTIVE:
+Create a rubric where each criterion corresponds directly to categories represented in the supplied test cases and edge cases.
+RUBRIC GENERATION RULES:
+1. Analyze all test cases.
+   - Count how many test cases belong to each category/type.
+   - Typical categories may include:
+     - normal
+     - edge
+     - corner
+     - stress
+   - Use only categories that actually appear in the provided data.
+2. Analyze all edge cases.
+   - Determine which boundary conditions, special conditions, or exceptional scenarios are being evaluated.
+   - Use this information to improve criterion descriptions.
+3. Weight allocation:
+   - Every category that appears in the provided test cases or edge cases must receive a non-zero percentage.
+   - Do not create categories that are not represented in the input.
+   - Assign percentages based on:
+     - frequency/count of cases
+     - importance of the category
+     - complexity of validation
+   - Higher-priority categories should generally receive greater weight:
+     stress > corner > edge > normal when importance is otherwise similar.
+   - Ensure percentages are reasonable and justified by the available evidence.
+4. Percentage constraints:
+   - Total percentage must equal exactly 100.
+   - No category with existing test cases may receive 0%.
+   - Do not exceed or fall below 100%.
+5. Marks calculation:
+   - For each rubric criterion:
+     marks = (percentage × total_marks) / 100
+   - Round to 2 decimal places if needed.
+6. Criterion descriptions:
+   - Clearly explain what aspect of correctness is being evaluated.
+   - Description must reflect the supplied test cases and edge cases.
+   - Do not invent unrelated assessment criteria.
+7. Output constraints:
+   - Return valid JSON only.
+   - No markdown.
+   - No explanations.
+   - No comments.
+   - No extra text before or after the JSON.
+OUTPUT SCHEMA:
+{
+  "rubric": [
+    {
+      "criterion": "string",
+      "test_case_type": "normal|edge|corner|stress",
+      "percentage": 0,
+      "marks": 0,
+      "description": "string"
+    }
+  ],
+  "total_percentage": 100,
+  "total_marks": 0,
+  "breakdown": {
+    "normal": 0,
+    "edge": 0,
+    "corner": 0,
+    "stress": 0
+  }
+}
+ADDITIONAL VALIDATION RULES:
+- The sum of all rubric percentages must equal total_percentage.
+- total_percentage must always equal 100.
+- The sum of all breakdown values must equal 100.
+- breakdown values must match the percentages assigned to rubric criteria.
+- Include only category keys that exist in the input data.
+- Do not create duplicate rubric entries for the same category.
+- Every rubric criterion must map to exactly one detected test case category.
+- If only one category exists, assign it 100%.
+- If multiple categories exist, distribute percentages proportionally while respecting category importance.
+- The output must be syntactically valid JSON and parsable without modification.
+- If edge_cases is empty or not provided, build rubric from test_cases only.
+- If test_cases is empty or not provided, build rubric from edge_cases only.
