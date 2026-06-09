@@ -13,8 +13,12 @@ from .models import Course, Problem, Module
 
 from groq import Groq
 client = Groq(api_key=os.environ.get('GROQ_API_KEY'))
+
 #from openai import OpenAI
-#client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
+#client = OpenAI(
+ #   api_key=os.environ.get('OPENAI_API_KEY'),
+  #  base_url="http://10.129.7.84:9000/v1"
+#)
 
 
 REQUIRED_COLUMNS = {'input', 'expected_output', 'marks', 'type'}
@@ -109,7 +113,7 @@ def upload_syllabus(request):
     
     syllabus_response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
-        #model="meta-llama/Llama-2-7b-hf",
+        #model="Qwen/Qwen2-7B",
         messages=[{"role": "user", "content": syllabus_message}],
         temperature=0.4,
     )
@@ -186,8 +190,10 @@ def generate_testcases(request):
 
     testcase_response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
+        #model="Qwen/Qwen2-7B",
         messages=[{"role": "user", "content": testcase_message}],
         temperature=0.3,
+        
     )
 
     test_cases = testcase_response.choices[0].message.content
@@ -196,8 +202,7 @@ def generate_testcases(request):
         data = parse_ai_json(test_cases)
         return Response(data)
     except json.JSONDecodeError:
-        return Response({'error': 'Failed to parse response from AI'}, status=500)
-
+        return Response({'error': 'Failed to parse response from AI', 'raw': test_cases}, status=500)
 
 
 
@@ -249,7 +254,7 @@ def generate_edgecases(request):
     
     edgecase_response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
-        #model="meta-llama/Llama-2-7b-hf",
+        #model="Qwen/Qwen2-7B",
         messages=[{"role": "user", "content": edgecase_message}],
         temperature=0.3,
     )
@@ -298,6 +303,7 @@ def generate_rubric(request):
 
     rubric_response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
+        #model="Qwen/Qwen2-7B",
         messages=[{"role": "user", "content": rubric_message}],
         temperature=0.3,
     )
